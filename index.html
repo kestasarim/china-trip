@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>China Trip Map – Minimal (Stable)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      --pin: #e11d48;
+      --route: #2563eb;
+      --ink: #111827;
+      --card: rgba(255,255,255,0.95);
+      --cardBorder: rgba(17,24,39,0.12);
+    }
+    body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #map { width:100vw; height:100vh; }
+    .leaflet-tile { filter: grayscale(85%) contrast(1.05) brightness(1.05); }
+
+    .city-tip{
+      background:var(--card);
+      border:1px solid var(--cardBorder);
+      border-radius:12px;
+      padding:10px 12px;
+      box-shadow:0 10px 24px rgba(0,0,0,.12);
+      min-width:240px;
+      max-width:320px;
+      color:var(--ink);
+    }
+    .city-tip .t-title{font-weight:700;font-size:14px;margin-bottom:6px;}
+    .city-tip .t-meta{font-size:13px;line-height:1.5;}
+    .city-tip .t-hi{margin-top:8px;padding-top:8px;border-top:1px solid rgba(17,24,39,.12);font-size:13px;}
+
+    .route-tip{
+      background:var(--card);
+      border:1px solid var(--cardBorder);
+      border-radius:10px;
+      padding:8px 10px;
+      box-shadow:0 10px 24px rgba(0,0,0,.12);
+      font-size:12.5px;
+      color:var(--ink);
+    }
+    .route-tip .r-title{font-weight:700;margin-bottom:4px;}
+
+    .num-badge{
+      width:22px;height:22px;border-radius:999px;
+      background:#fff;border:1px solid rgba(17,24,39,.18);
+      box-shadow:0 6px 14px rgba(0,0,0,.1);
+      display:grid;place-items:center;
+      font-weight:700;font-size:12px;color:var(--ink);
+    }
+
+    /* Remove Leaflet's default divIcon black border box */
+    .no-border-icon{
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    /* Prevent focus outlines (some environments draw black squares) */
+    .leaflet-marker-icon:focus,
+    .leaflet-interactive:focus,
+    .leaflet-container a:focus {
+      outline: none !important;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-curve/leaflet.curve.js"></script>
+<script>
+/* =====================
+   MAP INIT
+===================== */
+const map = L.map('map').setView([31.5,106.5],5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:''}).addTo(map);
+
+/* =====================
+   DATA
+===================== */
+const cities = [
+  {name:'Shanghai',lat:31.2304,lng:121.4737,days:'3 gün',dates:'14–16 Ocak 2026',highlight:'Bund • French Concession'},
+  {name:'Zhangjiajie',lat:29.1171,lng:110.4792,days:'3 gün',dates:'17–19 Ocak 2026',highlight:'Avatar Mountains • Tianmen'},
+  {name:'Fenghuang',lat:27.9483,lng:109.5996,days:'2 gün',dates:'20–21 Ocak 2026',highlight:'Ancient Town • River Walk'},
+  {name:'Chongqing',lat:29.5630,lng:106.5516,days:'2 gün',dates:'22–23 Ocak 2026',highlight:'Hongyadong • Cyberpunk'},
+  {name:'Guangzhou (1)',lat:23.1291,lng:113.2644,days:'4 gün',dates:'24–27 Ocak 2026',highlight:'Local Life • Trade'},
+  {name:'Guilin / Yangshuo',lat:25.2736,lng:110.2902,days:'3 gün',dates:'28–30 Ocak 2026',highlight:'Li River • Karst'},
+  {name:'Lijiang',lat:26.8721,lng:100.2290,days:'3 gün',dates:'31 Oca – 2 Şub 2026',highlight:'Old Town • Snow Mt.'},
+  {name:'Dali',lat:25.6065,lng:100.2676,days:'3 gün',dates:'3–5 Şub 2026',highlight:'Erhai • Slow Life'},
+  {name:'Guangzhou (2)',lat:23.2491,lng:113.4044,days:'4 gün',dates:'6–9 Şub 2026',highlight:'Trade • Road Trips'},
+  {name:'Shenzhen',lat:22.5431,lng:114.0579,days:'2 gün',dates:'10–11 Şub 2026',highlight:'Huaqiangbei'}
+];
+
+const routes = [
+  {from:0,to:1,mode:'Uçuş',date:'17 Ocak 2026'},
+  {from:1,to:2,mode:'Kara yolu',date:'20 Ocak 2026'},
+  {from:2,to:3,mode:'Tren',date:'22 Ocak 2026'},
+  {from:3,to:4,mode:'Uçuş',date:'24 Ocak 2026'},
+  {from:4,to:5,mode:'Hızlı tren',date:'28 Ocak 2026'},
+  {from:5,to:6,mode:'Uçuş',date:'31 Ocak 2026'},
+  {from:6,to:7,mode:'Tren',date:'3 Şubat 2026'},
+  {from:7,to:8,mode:'Uçuş',date:'6 Şubat 2026'},
+  {from:8,to:9,mode:'Hızlı tren',date:'10 Şubat 2026'}
+];
+
+/* =====================
+   HELPERS
+===================== */
+function travelIcon(mode){
+  const m=(mode||'').toLowerCase();
+  if(m.includes('uç')) return '✈️';
+  if(m.includes('tren')) return '🚄';
+  if(m.includes('kara')) return '🚗';
+  return '➡️';
+}
+
+function addNumber(idx,lat,lng){
+  return L.marker([lat,lng],{icon:L.divIcon({className:'no-border-icon',html:`<div class='num-badge'>${idx}</div>`,iconSize:[22,22],iconAnchor:[11,11]}),interactive:false}).addTo(map);
+}
+
+function addCity(c,i){
+  const m=L.circleMarker([c.lat,c.lng],{radius:6,color:varPin(),fillColor:varPin(),fillOpacity:1}).addTo(map);
+  m.bindTooltip(`<div class='city-tip'><div class='t-title'>${i+1}. ${c.name}</div><div class='t-meta'>📍 Çin<br>🗓 ${c.dates}<br>⏱ ${c.days}</div><div class='t-hi'>✨ ${c.highlight}</div></div>`,{sticky:true});
+  addNumber(i+1,c.lat,c.lng);
+}
+
+function varPin(){return getComputedStyle(document.documentElement).getPropertyValue('--pin')||'#e11d48';}
+
+function addTravelBadge(lat,lng,icon,tip){
+  const m=L.marker([lat,lng],{icon:L.divIcon({className:'no-border-icon',html:`<div style='background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:12px;padding:6px 10px;box-shadow:0 6px 14px rgba(0,0,0,.15);font-size:16px;'>${icon}</div>`,iconSize:[38,30],iconAnchor:[19,15]}),interactive:true}).addTo(map);
+  if(tip) m.bindTooltip(tip,{sticky:true});
+}
+
+function addCurvedRoute(a,b,label,mode){
+  const midLat=(a.lat+b.lat)/2;
+  const midLng=(a.lng+b.lng)/2;
+  const lift=1.2;
+  const ctrl=[midLat+lift,midLng];
+
+  const curve=L.curve(['M',[a.lat,a.lng],'Q',ctrl,[b.lat,b.lng]],{color:'#2563eb',weight:2.5,opacity:.8}).addTo(map);
+  const tip=`<div class='route-tip'><div class='r-title'>${a.name} → ${b.name}</div><div>${label}</div></div>`;
+  curve.bindTooltip(tip,{sticky:true});
+
+  const t=.5;
+  const qLat=(1-t)*(1-t)*a.lat+2*(1-t)*t*ctrl[0]+t*t*b.lat;
+  const qLng=(1-t)*(1-t)*a.lng+2*(1-t)*t*ctrl[1]+t*t*b.lng;
+  addTravelBadge(qLat,qLng,travelIcon(mode),tip);
+}
+
+/* =====================
+   RENDER
+===================== */
+cities.forEach(addCity);
+routes.forEach(r=>addCurvedRoute(cities[r.from],cities[r.to],`${r.mode} • ${r.date}`,r.mode));
+map.fitBounds(L.latLngBounds(cities.map(c=>[c.lat,c.lng])).pad(.18));
+
+/* =====================
+   TESTS
+===================== */
+console.assert(cities.length===10,'Expected 10 cities');
+console.assert(routes.length===9,'Expected 9 routes');
+console.assert(travelIcon('Uçuş')==='✈️','Flight icon failed');
+console.assert(travelIcon('Tren')==='🚄','Train icon failed');
+console.assert(travelIcon('Kara yolu')==='🚗','Road icon failed');
+</script>
+</body>
+</html>
